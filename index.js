@@ -47,6 +47,12 @@ function trigger(context) {
     }
 }
 
+function bind(context, callback) {
+    return function () {
+        callback.apply(context, arguments);
+    }
+}
+
 function Promise(resolver) {
     var self = this;
 
@@ -159,7 +165,7 @@ function resolveX(promise, x) {
         if (!isFunction(x.then)) {
             resolve(promise, x);
         } else {
-            doResolve(x.then.bind(x), promise);
+            doResolve(bind(x, x.then), promise);
         }
     } else {
         resolve(promise, x);
