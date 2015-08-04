@@ -20,34 +20,52 @@ function nextTick(context, callback) {
     }, 0);
 }
 
+function listen(context, callback) {
+    var callbacks = context._callbacks;
+
+    if (callbacks === void 0)
+        callbacks = context._callbacks = [];
+    }
+
+    callbacks.push(callback);
+}
+
+function trigger(context) {
+    var callbacks = promise._callbacks,
+        i,
+        len;
+
+    if (callbacks === void 0) {
+        return;
+    }
+
+    i = -1;
+    len = callbacks.length;
+
+    while (++i < len) {
+        callbacks[i].call(context);
+    }
+}
+
 function Promise(resolver) {
     var self = this;
 
     if (!isObject(self)) {
-        throw Error('create promise from new');
+        throw TypeError('Promises must be constructed via new');
     }
 
     if (!isFunction(resolver)) {
-        throw Error('resolver must be function');
+        throw TypeError('resolver is not a function');
     }
 
     self._status = Promise.PENDING;
     self._result = null;
-    self._callbacks = [];
 
     if (resolver === noop) {
         return;
     }
 
-    try {
-        resolver(function (value) {
-            resolve(self, value);
-        }, function (reason) {
-            reject(self, reason);
-        });
-    } catch (error) {
-        reject(self, error);
-    }
+    doResolve(resolver, self);
 }
 
 Promise.PENDING = 'pending';
@@ -56,22 +74,27 @@ Promise.FULFILLED = 'fulfilled';
 
 Promise.prototype = {
     then: function(onFulfilled, onRejected) {
-        var promise = new Promise(noop);
-
-        if (this._status === Promise.PENDING) {
-            listen(this, callback);
-        } else {
-            nextTick(this, callback);
-        }
+        var self = this,
+            promise = new Promise(noop);
 
         function callback() {
             var self = this,
                 x;
 
             if (self._status === Promise.REJECTED) {
-                x = isFunction(onRejected) && onRejected(self._result);
+                if (isFunction(onRejected)) {
+                    x = onRejected(self._result);
+                } else {
+                    resolve(promise, self._result);
+                    return;
+                }
             } else {
-                x = isFunction(onFulfilled) && onFulfilled(self._result);
+                if (isFunction(onFulfilled)) {
+                    x = onFulfilled(self._result);
+                } else {
+                    reject(promise, self._result);
+                    return;
+                }
             }
 
             if (isError(x)) {
@@ -79,6 +102,12 @@ Promise.prototype = {
             } else {
                 resolveX(promise, x);
             }
+        }
+
+        if (self._status === Promise.PENDING) {
+            listen(self, callback);
+        } else {
+            nextTick(self, callback);
         }
 
         return promise;
@@ -107,47 +136,7 @@ function reject(promise, reason) {
     trigger(promise);
 }
 
-function listen(promise, callback) {
-    promise._callbacks.push(callback);
-}
-
-function trigger(promise) {
-    var callbacks = promise._callbacks,
-        i = -1,
-        len = callbacks.length;
-
-    while (++i < len) {
-        callbacks[i].call(promise);
-    }
-}
-
 function resolveX(promise, x) {
-    if (promise === x) {
-        reject(promise, Error('a promise cannot be resolved with itself'));
-    } else if (x instanceof Promise) {
-        if (x._status === Promise.PENDING) {
-            listen(x, callback);
-        } else {
-            nextTick(x, calback);
-        }
-    } else if (isObject(x) || isFunction(x)) {
-        if (!isFunction(obj.then)) {
-            reject(promise, Error('x is not thenable'));
-        } else {
-            try {
-                x.then(function (value) {
-                    resolveX(promise, value);   
-                }, function (reason) {
-                    reject(promise, reason);
-                });
-            } catch (error) {
-                reject(promise, error);
-            }
-        }
-    } else {
-        resolve(promise, x);
-    }
-
     function callback() {
         var self = this;
 
@@ -155,6 +144,47 @@ function resolveX(promise, x) {
             reject(promise, self._result);
         } else {
             resolve(promise, self._result);
+        }
+    }
+
+    if (promise === x) {
+        reject(promise, TypeError('A promise cannot be resolved with itself.'));
+    } else if (x instanceof Promise) {
+        if (x._status === Promise.PENDING) {
+            listen(x, callback);
+        } else {
+            nextTick(x, calback);
+        }
+    } else if (isObject(x) || isFunction(x)) {
+        if (!isFunction(x.then)) {
+            resolve(promise, x);
+        } else {
+            doResolve(x.then.bind(x), promise);
+        }
+    } else {
+        resolve(promise, x);
+    }
+}
+
+function doResolve(resolver, promise) {
+    var done = false;
+    
+    try {
+        resolver(function (value) {
+            if (!done) {
+                done = true;
+                resolveX(promise, value);
+            }
+        }, function (reason) {
+            if (!done) {
+                done = true;
+                reject(promise, reason);
+            }
+        });
+    } catch (error) {
+        if (!done) {
+            done = true;
+            reject(promise, error);
         }
     }
 }
