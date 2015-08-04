@@ -23,7 +23,7 @@ function nextTick(context, callback) {
 function listen(context, callback) {
     var callbacks = context._callbacks;
 
-    if (callbacks === void 0)
+    if (callbacks === void 0) {
         callbacks = context._callbacks = [];
     }
 
@@ -31,7 +31,7 @@ function listen(context, callback) {
 }
 
 function trigger(context) {
-    var callbacks = promise._callbacks,
+    var callbacks = context._callbacks,
         i,
         len;
 

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Promise</title>
+</head>
+<body>
+    <script src="index.js"></script>
+    <script>
+        function getPromise(resolver) {
+            return new Promise(resolver);
+        }
+
+        getPromise(function (resolve, reject) {
+            setTimeout(function () {
+                resolve(1);
+            }, 1000);
+        }).then(function (value) {
+            console.log(value);
+
+            return getPromise(function (resolve, reject) {
+                setTimeout(function () {
+                    resolve(2);
+                }, 1000);
+            });
+        }).then(function (value) {
+            console.log(value);
+        });
+    </script>
+</body>
+</html>
